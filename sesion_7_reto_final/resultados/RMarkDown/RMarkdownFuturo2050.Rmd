@@ -1,0 +1,113 @@
+---
+title: "Reto_final_2060"
+author: "Alejandro_Herrera"
+date: "February 10, 2016"
+output: html_document
+---
+
+###################################
+#ESTABLECE EL DIRECTORIO DE TRABAJO
+###################################
+#DIRECTORIO DE TRABAJO
+dir_trabajo<-"C:/Users/INICIO/Desktop/Master CoGeRe Alejandro Herrera/Ecoinformatica/ecoinformatica_2015_2016/sesion_7_reto_final"
+#ESTABLECE EL DIRECTORIO DE TRABAJO
+setwd(dir_trabajo)
+
+getwd()
+
+
+################################
+#INSTALACION Y CARGA DE PAQUETES
+################################
+
+#CARGA LAS LIBRERIAS NECESARIAS (EJECUTAR SIEMPRE QUE TRABAJES CON EL SCRIPT)
+library(dismo)
+library(plotmo)
+library(randomForest)
+library(party)
+library(HH)
+library(tree)
+library(rgdal)
+
+
+##################################
+#IMPORTA LAS VARIABLES PREDICTORAS
+##################################
+#LISTADO DE VARIABLES
+lista_variables2050 <- list.files(path="variables/futuro_A2/2050/",pattern='*.asc', full.names=TRUE)
+
+#stack Y brick PREPARAN LAS VARIABLES EN UN UNICO OBJETO ESPACIAL
+help(brick) #mapas en memoria, más rápido (pero usa mucha RAM)
+help(stack) #mapas en disco, más lento (pero usa menos RAM)
+variables2050 <- brick(stack(lista_variables2050))
+
+#DIBUJA LAS VARIABLES PREDICTORAS
+png("resultados/variables2050.png", width=2000, height=2000, pointsize=20)
+plot(variables2050)
+dev.off()
+
+
+
+#####################################################
+#ANÁLISIS DE CORRELACIÓN DE LAS VARIABLES PREDICTORAS
+#####################################################
+
+#TRANSFORMA LOS MAPAS EN UNA TABLA
+variables2050_tabla<-as.data.frame(variables2050)
+
+#ELIMINA LOS VALORES NULOS
+variables2050_tabla<-na.omit(variables2050_tabla)
+
+#MATRIZ DE CORRELACIÓN
+help(cor)
+variables2050_correlacion<-cor(variables2050_tabla)
+
+#MATRIZ DE DISTANCIAS ('ABS' = VALOR ABSOLUTO, PARA ELIMINAR CORRELACIONES NEGATIVAS)
+help(as.dist)
+help(abs)
+variables2050_dist<-abs(as.dist(variables2050_correlacion))
+
+#CLUSTER DE VARIABLES SEGÚN LA DISTANCIA (MENOR DISTANCIA = MAYOR CORRELACIÓN)
+help(hclust)
+variables2050_cluster<-hclust(1-variables2050_dist)
+
+#GRAFICO DEL CLUSTER DE CORRELACIONES 
+plot(variables2050_cluster)
+
+#GRÁFICO DEL CLUSTER DE CORRELACIONES EXPORTADO A PDF
+pdf("correlacion2050.pdf", width=8, height=11.5, pointsize=20)
+plot(variables2050_cluster)
+dev.off()
+
+#SELECCIONAMOS LAS VARIABLES CON LAS QUE QUEREMOS TRABAJAR
+variables2050_tabla2<-data.frame(variables2050_tabla$PA,variables2050_tabla$topo_posic,variables2050_tabla$sol_rad_sum,variables2050_tabla$huella_humana,variables2050_tabla$PV,variables2050_tabla$topo_pend)
+
+names(variables2050_tabla2)<-c("PA","topo_posic","sol_rad_sum","huella_humana","PV","topo_pend")
+
+
+#VEMOS EL RESULTADO
+
+head(tabla_completa)
+
+
+# Computamos una regresión logística con todos nuestras variables y con los datos de presencia/ausencia
+
+m4<-glm(respuesta ~.,data=tabla_completa)
+summary(m4)
+
+# seleccionamos las variables que son significativas. Los "estimate" nos dan idea de la ganancia de cada variable.
+tabla_modelo <-tabla_completa[,c('huella_humana','PA','PV','topo_posic','respuesta')]
+
+m24<-glm(respuesta~., data=tabla_modelo)
+summary(m24)
+
+# valores predichos. Ya tenemos nuestro modelo matemático, ahora vamos a aplicarlo a las variables (mapas) que teníamos al principio.
+
+
+p<-predict(variables2050, m24)
+plot(p)
+
+
+# Generar mapa en formato .asc
+p_raster<-raster(p)
+writeRaster(p, "modelo_futuro2050.asc")
